@@ -3,10 +3,11 @@ package main
 import (
 	"fmt"
 	"log"
-	"strings"
+
+	//"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
+	//"github.com/google/uuid"
 )
 
 func uploadImage(c *fiber.Ctx) error {
@@ -18,13 +19,14 @@ func uploadImage(c *fiber.Ctx) error {
 
 	}
 
-	uniqueId := uuid.New()
+	// uniqueId := uuid.New()
 
-	filename := strings.Replace(uniqueId.String(), "-", "", -1)
+	// filename := strings.Replace(uniqueId.String(), "-", "", -1)
 
-	fileExt := strings.Split(file.Filename, ".")[1]
+	// fileExt := strings.Split(file.Filename, ".")[1]
 
-	image := fmt.Sprintf("%s.%s", filename, fileExt)
+	// image := fmt.Sprintf("%s.%s", filename, fileExt)
+	image := file.Filename
 
 	err = c.SaveFile(file, fmt.Sprintf("./images/%s", image))
 
@@ -46,6 +48,10 @@ func uploadImage(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"status": 201, "message": "Image uploaded successfully", "data": data})
 }
 
+func downloadImage(c *fiber.Ctx) error {
+	return c.SendFile("./images/" + c.Params("imageName"))
+}
+
 func main() {
 	// Create a new Fiber app
 	app := fiber.New()
@@ -55,6 +61,7 @@ func main() {
 	})
 	// Define a route for handling image uploads
 	app.Post("/upload", uploadImage)
+	app.Get("/images/:imageName", downloadImage)
 
 	// Start the Fiber server on port 3000
 	if err := app.Listen(":3000"); err != nil {
