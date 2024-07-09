@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 
 	//"strings"
 
@@ -10,60 +12,77 @@ import (
 	//"github.com/google/uuid"
 )
 
-func uploadImage(c *fiber.Ctx) error {
-	file, err := c.FormFile("image")
+type FileRequest struct {
+	Filename string `json:"filename"`
+}
+
+func uploadFile(c *fiber.Ctx) error {
+	file, err := c.FormFile("file")
 
 	if err != nil {
-		log.Println("Error in uploading Image : ", err)
-		return c.JSON(fiber.Map{"status": 500, "message": "Server error", "data": nil})
-
+		return c.Status(fiber.StatusInternalServerError).SendString("Error in uploading Image: " + err.Error())
 	}
-
-	// uniqueId := uuid.New()
-
-	// filename := strings.Replace(uniqueId.String(), "-", "", -1)
-
-	// fileExt := strings.Split(file.Filename, ".")[1]
-
-	// image := fmt.Sprintf("%s.%s", filename, fileExt)
-	image := file.Filename
-
-	err = c.SaveFile(file, fmt.Sprintf("./images/%s", image))
+	fileName := file.Filename
+	err = c.SaveFile(file, filepath.Join("./files_repo", fileName))
 
 	if err != nil {
-		log.Println("Error in saving Image :", err)
-		return c.JSON(fiber.Map{"status": 500, "message": "Server error", "data": nil})
+		return c.Status(fiber.StatusInternalServerError).SendString("Internal error saving file: " + err.Error())
 	}
-
-	imageUrl := fmt.Sprintf("http://localhost:3000/images/%s", image)
 
 	data := map[string]interface{}{
 
-		"imageName": image,
-		"imageUrl":  imageUrl,
-		"header":    file.Header,
-		"size":      file.Size,
+		"fileName": fileName,
+		"header":   file.Header,
+		"size":     file.Size,
 	}
 
-	return c.JSON(fiber.Map{"status": 201, "message": "Image uploaded successfully", "data": data})
+	return c.JSON(fiber.Map{"status": 201, "message": "File has been uploaded and saved successfully", "data": data})
 }
 
-func downloadImage(c *fiber.Ctx) error {
-	return c.SendFile("./images/" + c.Params("imageName"))
+func downloadFile(c *fiber.Ctx) error {
+	var req FileRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("Error parsing download request body: " + err.Error())
+	}
+	filePath := filepath.Join("./files_repo", req.Filename)
+	return c.SendFile(filePath)
+}
+
+func deleteFile(c *fiber.Ctx) error {
+	var req FileRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("Error parsing delete request body: " + err.Error())
+	}
+	filePath := filepath.Join("./files_repo", req.Filename)
+	err := os.Remove(filePath)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("Error deleting file: " + err.Error())
+	}
+	return c.SendString(fmt.Sprintf("File %s deleted successfully", req.Filename))
+}
+
+func getAllFileNames(c *fiber.Ctx) error {
+	filePath := "./files_repo"
+	files, err := os.ReadDir(filePath)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("Error reading files directory: " + err.Error())
+	}
+
+	var fileNames []string
+	for _, file := range files {
+		fileNames = append(fileNames, file.Name())
+	}
+	return c.JSON(fileNames)
 }
 
 func main() {
-	// Create a new Fiber app
 	app := fiber.New()
 
-	app.Get("/", func(c *fiber.Ctx) error {
-		return c.SendString("Hello, World!")
-	})
-	// Define a route for handling image uploads
-	app.Post("/upload", uploadImage)
-	app.Get("/images/:imageName", downloadImage)
+	app.Get("/", getAllFileNames)
+	app.Post("/upload", uploadFile)
+	app.Get("/:fileName", downloadFile)
+	app.Delete("/", deleteFile)
 
-	// Start the Fiber server on port 3000
 	if err := app.Listen(":3000"); err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}
